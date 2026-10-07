@@ -21,8 +21,8 @@ migrations/001_init.sql    esquema que espera el código
 
 ```bash
 go mod tidy                 # descarga dependencias y genera go.sum (súbelo a GitHub)
-cp .env .env        # edita DATABASE_URL y JWT_SECRET
-export $(grep -v '^#' .env | xargs)
+cp .env.example .env.example        # edita DATABASE_URL y JWT_SECRET
+export $(grep -v '^#' .env.example | xargs)
 go run ./cmd/api
 ```
 

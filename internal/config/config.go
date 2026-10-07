@@ -14,10 +14,10 @@ type Config struct {
 
 func Load() (*Config, error) {
 	c := &Config{
-		Port:        getenv("PORT", "8080"),
+		Port:        os.Getenv("PORT"),
 		DatabaseURL: os.Getenv("DATABASE_URL"),
 		JWTSecret:   os.Getenv("JWT_SECRET"),
-		AppTZ:       getenv("APP_TZ", "UTC"),
+		AppTZ:       os.Getenv("APP_TZ"),
 	}
 	if c.DatabaseURL == "" {
 		return nil, errors.New("DATABASE_URL es obligatoria")

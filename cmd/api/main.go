@@ -11,17 +11,24 @@ import (
 	"time"
 	_ "time/tzdata" // zonas horarias embebidas (el contenedor de Render no las trae)
 
-	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
-
 	"finanzas-api/internal/auth"
 	"finanzas-api/internal/config"
 	"finanzas-api/internal/db"
 	"finanzas-api/internal/handlers"
 	"finanzas-api/internal/httpx"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
+	"github.com/joho/godotenv"
 )
 
 func main() {
+	err := godotenv.Load()
+
+	if err != nil {
+		log.Println("No se encontró .env")
+	}
+
 	cfg, err := config.Load()
 	if err != nil {
 		log.Fatalf("configuración: %v", err)
