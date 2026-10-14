@@ -122,6 +122,14 @@ func main() {
 			r.Put("/recurrentes/{id}", api.UpdateRecurrente)
 			r.Delete("/recurrentes/{id}", api.DeleteRecurrente)
 
+			r.Get("/programados", api.ListProgramados)
+			r.Post("/programados", api.CreateProgramado)
+			r.Put("/programados/{id}", api.UpdateProgramado)
+			r.Delete("/programados/{id}", api.DeleteProgramado)
+			r.Get("/programados/{id}/apartados", api.ListProgramadoApartados)
+			r.Post("/programados/{id}/apartados", api.CreateProgramadoApartado)
+			r.Post("/programados/{id}/pagar", api.PagarProgramado)
+
 			r.Get("/resumen", api.GetResumen)
 		})
 	})

@@ -32,10 +32,16 @@ Al actualizar una instalación existente, ejecuta en el SQL Editor de Neon, en o
 
 1. `migrations/001_init.sql` (solo necesario si aún no se creó el esquema base).
 2. `migrations/002_cuentas_y_transferencias.sql`.
+3. `migrations/003_gastos_programados.sql`.
 
 La segunda migración agrega cuentas financieras y transferencias sin borrar los gastos
 ni ingresos existentes. Los movimientos anteriores quedan sin cuenta asignada y no se
 incluyen en el saldo calculado desde la fecha de saldo inicial de cada cuenta.
+
+La tercera migración agrega gastos programados y apartados virtuales. Los apartados se
+vinculan al vencimiento actual y se conservan como historial. Al confirmar un pago se
+registra un gasto normal, se avanza el siguiente vencimiento (o se desactiva si era único)
+y no se realizan transferencias automáticas.
 
 El saldo inicial de efectivo, débito y ahorro representa dinero disponible; en una
 cuenta de crédito representa deuda. Los gastos afectan la cuenta seleccionada, y un
@@ -60,6 +66,10 @@ retiro o pago de tarjeta se registra como transferencia para no duplicarlo como 
 | GET/POST | /ingresos, PUT/DELETE /ingresos/{id} | Ingresos / nómina |
 | GET/POST | /recurrentes, PUT/DELETE /recurrentes/{id} | Servicios y gastos fijos mensuales |
 | POST | /recurrentes/generar?mes=2026-10 | Crea los gastos del mes (idempotente) |
+| GET/POST | /programados | Listar y crear gastos programados |
+| PUT/DELETE | /programados/{id} | Editar o desactivar un gasto programado |
+| GET/POST | /programados/{id}/apartados | Historial y registro de aportaciones virtuales |
+| POST | /programados/{id}/pagar | Registra el gasto pagado y avanza el siguiente vencimiento |
 | GET | /resumen?mes=2026-10 | Ingresos, gastos, balance y gasto por categoría |
 
 ## Ejemplos
