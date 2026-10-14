@@ -30,36 +30,36 @@ type FlujoQuincena struct {
 	EsUltimaNomina             bool    `json:"es_ultima_nomina"`
 }
 
-// cuentaBalancesAlDiaSQL calcula el saldo reconstruido de una cuenta hasta $3.
+// cuentaBalancesAlDiaSQL calcula el saldo reconstruido de una cuenta hasta $2.
 const cuentaBalancesAlDiaSQL = `
 	CASE WHEN c.tipo = 'credito' THEN
 		c.saldo_inicial
 		+ COALESCE((SELECT SUM(g.monto) FROM gastos g
 			WHERE g.cuenta_id = c.id AND g.usuario_id = c.usuario_id
-			  AND g.fecha >= c.fecha_saldo_inicial AND g.fecha <= $3), 0)
+			  AND g.fecha >= c.fecha_saldo_inicial AND g.fecha <= $2), 0)
 		- COALESCE((SELECT SUM(t.monto) FROM transferencias t
 			WHERE t.cuenta_destino_id = c.id AND t.usuario_id = c.usuario_id
-			  AND t.fecha >= c.fecha_saldo_inicial AND t.fecha <= $3), 0)
+			  AND t.fecha >= c.fecha_saldo_inicial AND t.fecha <= $2), 0)
 		+ COALESCE((SELECT SUM(a.monto) FROM ajustes_saldo a
 			WHERE a.cuenta_id = c.id AND a.usuario_id = c.usuario_id
-			  AND a.fecha >= c.fecha_saldo_inicial AND a.fecha <= $3), 0)
+			  AND a.fecha >= c.fecha_saldo_inicial AND a.fecha <= $2), 0)
 	ELSE
 		c.saldo_inicial
 		+ COALESCE((SELECT SUM(i.monto) FROM ingresos i
 			WHERE i.cuenta_id = c.id AND i.usuario_id = c.usuario_id
-			  AND i.fecha >= c.fecha_saldo_inicial AND i.fecha <= $3), 0)
+			  AND i.fecha >= c.fecha_saldo_inicial AND i.fecha <= $2), 0)
 		- COALESCE((SELECT SUM(g.monto) FROM gastos g
 			WHERE g.cuenta_id = c.id AND g.usuario_id = c.usuario_id
-			  AND g.fecha >= c.fecha_saldo_inicial AND g.fecha <= $3), 0)
+			  AND g.fecha >= c.fecha_saldo_inicial AND g.fecha <= $2), 0)
 		+ COALESCE((SELECT SUM(t.monto) FROM transferencias t
 			WHERE t.cuenta_destino_id = c.id AND t.usuario_id = c.usuario_id
-			  AND t.fecha >= c.fecha_saldo_inicial AND t.fecha <= $3), 0)
+			  AND t.fecha >= c.fecha_saldo_inicial AND t.fecha <= $2), 0)
 		- COALESCE((SELECT SUM(t.monto) FROM transferencias t
 			WHERE t.cuenta_origen_id = c.id AND t.usuario_id = c.usuario_id
-			  AND t.fecha >= c.fecha_saldo_inicial AND t.fecha <= $3), 0)
+			  AND t.fecha >= c.fecha_saldo_inicial AND t.fecha <= $2), 0)
 		+ COALESCE((SELECT SUM(a.monto) FROM ajustes_saldo a
 			WHERE a.cuenta_id = c.id AND a.usuario_id = c.usuario_id
-			  AND a.fecha >= c.fecha_saldo_inicial AND a.fecha <= $3), 0)
+			  AND a.fecha >= c.fecha_saldo_inicial AND a.fecha <= $2), 0)
 	END`
 
 func (a *API) GetFlujoQuincena(w http.ResponseWriter, r *http.Request) {
@@ -121,12 +121,12 @@ func (a *API) GetFlujoQuincena(w http.ResponseWriter, r *http.Request) {
 
 	if err := a.DB.QueryRow(r.Context(), `
 		SELECT COALESCE(SUM(CASE
-			WHEN c.fecha_saldo_inicial > $3 THEN 0
+			WHEN c.fecha_saldo_inicial > $2 THEN 0
 			ELSE (`+cuentaBalancesAlDiaSQL+`)::float8
 		END), 0)
 		FROM cuentas c
 		WHERE c.usuario_id = $1 AND c.activa AND c.tipo <> 'credito'`,
-		uid, fechaInicio, fechaInicio.AddDate(0, 0, -1)).Scan(&flujo.SaldoDisponibleInicio); err != nil {
+		uid, fechaInicio.AddDate(0, 0, -1)).Scan(&flujo.SaldoDisponibleInicio); err != nil {
 		httpx.DBError(w, err)
 		return
 	}
