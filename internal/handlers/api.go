@@ -14,9 +14,10 @@ import (
 const dateLayout = "2006-01-02"
 
 type API struct {
-	DB        *pgxpool.Pool
-	JWTSecret string
-	Loc       *time.Location // zona horaria del usuario (APP_TZ)
+	DB              *pgxpool.Pool
+	JWTSecret       string
+	GoogleClientIDs map[string]struct{}
+	Loc             *time.Location // zona horaria del usuario (APP_TZ)
 }
 
 func (a *API) HealthDB(w http.ResponseWriter, r *http.Request) {

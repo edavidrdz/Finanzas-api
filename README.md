@@ -21,8 +21,8 @@ migrations/                  scripts SQL versionados
 
 ```bash
 go mod tidy                 # descarga dependencias y genera go.sum (súbelo a GitHub)
-cp .env.example .env.example        # edita DATABASE_URL y JWT_SECRET
-export $(grep -v '^#' .env.example | xargs)
+cp .env.example .env        # edita DATABASE_URL y JWT_SECRET
+export $(grep -v '^#' .env | xargs)
 go run ./cmd/api
 ```
 
@@ -34,6 +34,7 @@ Al actualizar una instalación existente, ejecuta en el SQL Editor de Neon, en o
 2. `migrations/002_cuentas_y_transferencias.sql`.
 3. `migrations/003_gastos_programados.sql`.
 4. `migrations/004_ingresos_programados_y_flujo.sql`.
+5. `migrations/005_google_auth.sql` para permitir acceso y registro con Google.
 
 La segunda migración agrega cuentas financieras y transferencias sin borrar los gastos
 ni ingresos existentes. Los movimientos anteriores quedan sin cuenta asignada y no se
@@ -51,6 +52,13 @@ vigentes se convierten en apartados virtuales del gasto. El flujo quincenal usa 
 reales marcados como `quincenal`; resta gastos de cuentas no crediticias y transferencias
 de pago de tarjeta, pero presenta las compras con tarjeta por separado para no duplicarlas.
 
+La quinta migración permite usuarios autenticados por Google sin contraseña local y registra
+vínculos Google explícitos. El API valida los ID tokens con Google y solo acepta audiencias
+incluidas en `GOOGLE_CLIENT_IDS` (lista de Client IDs separada por comas). Una cuenta ya
+registrada con el mismo correo debe iniciar sesión normalmente y vincular Google desde Ajustes.
+Para vincularla, la persona debe estar autenticada en esa cuenta y confirmar la cuenta Google;
+el vínculo no se realiza automáticamente por coincidencia de correo.
+
 El saldo inicial de efectivo, débito y ahorro representa dinero disponible; en una
 cuenta de crédito representa deuda. Los gastos afectan la cuenta seleccionada, y un
 retiro o pago de tarjeta se registra como transferencia para no duplicarlo como gasto.
@@ -60,13 +68,17 @@ retiro o pago de tarjeta se registra como transferencia para no duplicarlo como 
 - Build Command: `go build -o app ./cmd/api`
 - Start Command: `./app`
 - Health Check Path: `/health`
-- Variables de entorno: `DATABASE_URL`, `JWT_SECRET`, `APP_TZ` (ej. `America/Mexico_City`)
+- Variables de entorno: `DATABASE_URL`, `JWT_SECRET`, `APP_TZ` (ej. `America/Mexico_City`),
+  `GOOGLE_CLIENT_IDS` (opcional hasta habilitar Google), `CORS_ORIGINS` (orígenes web permitidos,
+  separados por coma; agrega el dominio final del sitio web si se usa Google en web)
 
 ## Endpoints (prefijo `/api/v1`, todo con `Authorization: Bearer <token>` salvo auth)
 
 | Método | Ruta | Descripción |
 |---|---|---|
 | POST | /auth/register, /auth/login | Registro / login (devuelven token) |
+| POST | /auth/google | Valida token Google e inicia sesión o crea una cuenta |
+| POST | /auth/google/link | Vincula Google a la cuenta autenticada |
 | GET/POST/DELETE | /categorias | Categorías (se crean por defecto al registrarse) |
 | GET/POST/PUT/DELETE | /cuentas | Cuentas y saldos (DELETE archiva) |
 | GET/POST | /transferencias | Retiros, traspasos y pagos de tarjeta |

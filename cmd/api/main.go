@@ -48,17 +48,25 @@ func main() {
 	}
 	defer pool.Close()
 
-	api := &handlers.API{DB: pool, JWTSecret: cfg.JWTSecret, Loc: loc}
+	googleClientIDs := make(map[string]struct{}, len(cfg.GoogleClientIDs))
+	for _, id := range cfg.GoogleClientIDs {
+		googleClientIDs[id] = struct{}{}
+	}
+	api := &handlers.API{DB: pool, JWTSecret: cfg.JWTSecret, GoogleClientIDs: googleClientIDs, Loc: loc}
 
 	r := chi.NewRouter()
-
-	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins: []string{
+	corsOrigins := cfg.CORSOrigins
+	if len(corsOrigins) == 0 {
+		corsOrigins = []string{
 			"http://localhost:8081",
 			"http://localhost:19006",
 			"http://localhost:3000",
 			"https://localhost:8081",
-		},
+		}
+	}
+
+	r.Use(cors.Handler(cors.Options{
+		AllowedOrigins: corsOrigins,
 		AllowedMethods: []string{
 			"GET",
 			"POST",
@@ -91,10 +99,12 @@ func main() {
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Post("/auth/register", api.Register)
 		r.Post("/auth/login", api.Login)
+		r.Post("/auth/google", api.GoogleLogin)
 
 		r.Group(func(r chi.Router) {
 			r.Use(auth.Middleware(cfg.JWTSecret))
 
+			r.Post("/auth/google/link", api.LinkGoogleAccount)
 			r.Get("/categorias", api.ListCategorias)
 			r.Post("/categorias", api.CreateCategoria)
 			r.Delete("/categorias/{id}", api.DeleteCategoria)
