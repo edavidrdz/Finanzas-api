@@ -84,6 +84,8 @@ const cuentaBalancesSQL = `
 			WHERE g.cuenta_id = c.id AND g.usuario_id = c.usuario_id AND g.fecha >= c.fecha_saldo_inicial), 0)
 		- COALESCE((SELECT SUM(t.monto) FROM transferencias t
 			WHERE t.cuenta_destino_id = c.id AND t.usuario_id = c.usuario_id AND t.fecha >= c.fecha_saldo_inicial), 0)
+		+ COALESCE((SELECT SUM(a.monto) FROM ajustes_saldo a
+			WHERE a.cuenta_id = c.id AND a.usuario_id = c.usuario_id AND a.fecha >= c.fecha_saldo_inicial), 0)
 	ELSE
 		c.saldo_inicial
 		+ COALESCE((SELECT SUM(i.monto) FROM ingresos i
@@ -94,6 +96,8 @@ const cuentaBalancesSQL = `
 			WHERE t.cuenta_destino_id = c.id AND t.usuario_id = c.usuario_id AND t.fecha >= c.fecha_saldo_inicial), 0)
 		- COALESCE((SELECT SUM(t.monto) FROM transferencias t
 			WHERE t.cuenta_origen_id = c.id AND t.usuario_id = c.usuario_id AND t.fecha >= c.fecha_saldo_inicial), 0)
+		+ COALESCE((SELECT SUM(a.monto) FROM ajustes_saldo a
+			WHERE a.cuenta_id = c.id AND a.usuario_id = c.usuario_id AND a.fecha >= c.fecha_saldo_inicial), 0)
 	END`
 
 func (a *API) ListCuentas(w http.ResponseWriter, r *http.Request) {

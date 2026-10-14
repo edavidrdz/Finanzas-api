@@ -58,3 +58,23 @@ func TestAportacionSugerida(t *testing.T) {
 		t.Fatalf("aportacionSugerida() for funded amount = (%v, %d), want (0, 0)", sugerida, dias)
 	}
 }
+
+func TestSiguienteFechaIngreso(t *testing.T) {
+	actual := time.Date(2026, time.January, 31, 0, 0, 0, 0, time.UTC)
+	got, err := siguienteFechaIngreso(actual, "semanal", 31)
+	if err != nil || got.Format(dateLayout) != "2026-02-07" {
+		t.Fatalf("siguienteFechaIngreso() semanal = (%s, %v), want 2026-02-07", got.Format(dateLayout), err)
+	}
+
+	got, err = siguienteFechaIngreso(actual, "quincenal", 31)
+	if err != nil || got.Format(dateLayout) != "2026-02-14" {
+		t.Fatalf("siguienteFechaIngreso() quincenal = (%s, %v), want 2026-02-14", got.Format(dateLayout), err)
+	}
+}
+
+func TestCalcularDisponibleQuincenaNoDuplicaCargosDeTarjeta(t *testing.T) {
+	got := calcularDisponibleQuincena(500, 10000, 200, -50, 3000, 2500)
+	if got != 5150 {
+		t.Fatalf("calcularDisponibleQuincena() = %v, want 5150", got)
+	}
+}

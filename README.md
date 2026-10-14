@@ -33,6 +33,7 @@ Al actualizar una instalación existente, ejecuta en el SQL Editor de Neon, en o
 1. `migrations/001_init.sql` (solo necesario si aún no se creó el esquema base).
 2. `migrations/002_cuentas_y_transferencias.sql`.
 3. `migrations/003_gastos_programados.sql`.
+4. `migrations/004_ingresos_programados_y_flujo.sql`.
 
 La segunda migración agrega cuentas financieras y transferencias sin borrar los gastos
 ni ingresos existentes. Los movimientos anteriores quedan sin cuenta asignada y no se
@@ -42,6 +43,13 @@ La tercera migración agrega gastos programados y apartados virtuales. Los apart
 vinculan al vencimiento actual y se conservan como historial. Al confirmar un pago se
 registra un gasto normal, se avanza el siguiente vencimiento (o se desactiva si era único)
 y no se realizan transferencias automáticas.
+
+La cuarta migración permite registrar ingresos esperados, asignarlos a vencimientos futuros
+y guardar ajustes de conciliación de saldos sin alterar los totales históricos de ingresos
+y gastos. Cuando se confirma un ingreso esperado, se crea el ingreso real y sus asignaciones
+vigentes se convierten en apartados virtuales del gasto. El flujo quincenal usa ingresos
+reales marcados como `quincenal`; resta gastos de cuentas no crediticias y transferencias
+de pago de tarjeta, pero presenta las compras con tarjeta por separado para no duplicarlas.
 
 El saldo inicial de efectivo, débito y ahorro representa dinero disponible; en una
 cuenta de crédito representa deuda. Los gastos afectan la cuenta seleccionada, y un
@@ -70,6 +78,11 @@ retiro o pago de tarjeta se registra como transferencia para no duplicarlo como 
 | PUT/DELETE | /programados/{id} | Editar o desactivar un gasto programado |
 | GET/POST | /programados/{id}/apartados | Historial y registro de aportaciones virtuales |
 | POST | /programados/{id}/pagar | Registra el gasto pagado y avanza el siguiente vencimiento |
+| POST | /cuentas/{id}/conciliar | Ajusta el saldo calculado al saldo real sin crear ingreso/gasto |
+| GET/POST/PUT/DELETE | /ingresos-programados | Consultar y gestionar ingresos esperados |
+| POST | /ingresos-programados/{id}/recibir | Convierte un ingreso esperado en un ingreso real |
+| GET/POST/DELETE | /ingresos-programados/{id}/asignaciones | Asignar el ingreso esperado a un gasto programado |
+| GET | /flujo/quincena?ingreso_id=... | Flujo real y sobrante desde una nómina quincenal |
 | GET | /resumen?mes=2026-10 | Ingresos, gastos, balance y gasto por categoría |
 
 ## Ejemplos

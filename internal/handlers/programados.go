@@ -15,19 +15,20 @@ import (
 )
 
 type Programado struct {
-	ID                 string  `json:"id"`
-	CategoriaID        *string `json:"categoria_id"`
-	Categoria          *string `json:"categoria,omitempty"`
-	CuentaID           *string `json:"cuenta_id"`
-	Cuenta             *string `json:"cuenta,omitempty"`
-	Nombre             string  `json:"nombre"`
-	Monto              float64 `json:"monto"`
-	FechaProximoPago   string  `json:"fecha_proximo_pago"`
-	Frecuencia         string  `json:"frecuencia"`
-	Activo             bool    `json:"activo"`
-	ApartadoActual     float64 `json:"apartado_actual"`
-	AportacionSugerida float64 `json:"aportacion_mensual_sugerida"`
-	DiasRestantes      int     `json:"dias_restantes"`
+	ID                         string  `json:"id"`
+	CategoriaID                *string `json:"categoria_id"`
+	Categoria                  *string `json:"categoria,omitempty"`
+	CuentaID                   *string `json:"cuenta_id"`
+	Cuenta                     *string `json:"cuenta,omitempty"`
+	Nombre                     string  `json:"nombre"`
+	Monto                      float64 `json:"monto"`
+	FechaProximoPago           string  `json:"fecha_proximo_pago"`
+	Frecuencia                 string  `json:"frecuencia"`
+	Activo                     bool    `json:"activo"`
+	ApartadoActual             float64 `json:"apartado_actual"`
+	IngresosEstimadosAsignados float64 `json:"ingresos_estimados_asignados"`
+	AportacionSugerida         float64 `json:"aportacion_mensual_sugerida"`
+	DiasRestantes              int     `json:"dias_restantes"`
 }
 
 type programadoInput struct {
@@ -130,7 +131,12 @@ func (a *API) ListProgramados(w http.ResponseWriter, r *http.Request) {
 		           SELECT SUM(ap.monto)
 		           FROM programado_apartados ap
 		           WHERE ap.programado_id = p.id AND ap.fecha_programada = p.fecha_proximo_pago
-		       ), 0)::float8
+		              ), 0)::float8,
+		              COALESCE((
+		                  SELECT SUM(ai.monto)
+		                  FROM asignaciones_ingresos_programados ai
+		                  WHERE ai.gasto_programado_id = p.id AND ai.fecha_gasto_programada = p.fecha_proximo_pago
+		              ), 0)::float8
 		FROM gastos_programados p
 		LEFT JOIN categorias c ON c.id = p.categoria_id
 		LEFT JOIN cuentas cta ON cta.id = p.cuenta_id
@@ -146,7 +152,8 @@ func (a *API) ListProgramados(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var p Programado
 		if err := rows.Scan(&p.ID, &p.CategoriaID, &p.Categoria, &p.CuentaID, &p.Cuenta,
-			&p.Nombre, &p.Monto, &p.FechaProximoPago, &p.Frecuencia, &p.Activo, &p.ApartadoActual); err != nil {
+			&p.Nombre, &p.Monto, &p.FechaProximoPago, &p.Frecuencia, &p.Activo,
+			&p.ApartadoActual, &p.IngresosEstimadosAsignados); err != nil {
 			httpx.DBError(w, err)
 			return
 		}

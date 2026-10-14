@@ -103,6 +103,7 @@ func main() {
 			r.Post("/cuentas", api.CreateCuenta)
 			r.Put("/cuentas/{id}", api.UpdateCuenta)
 			r.Delete("/cuentas/{id}", api.DeleteCuenta)
+			r.Post("/cuentas/{id}/conciliar", api.ConciliarCuenta)
 			r.Get("/transferencias", api.ListTransferencias)
 			r.Post("/transferencias", api.CreateTransferencia)
 
@@ -129,6 +130,17 @@ func main() {
 			r.Get("/programados/{id}/apartados", api.ListProgramadoApartados)
 			r.Post("/programados/{id}/apartados", api.CreateProgramadoApartado)
 			r.Post("/programados/{id}/pagar", api.PagarProgramado)
+
+			r.Get("/ingresos-programados", api.ListIngresosProgramados)
+			r.Post("/ingresos-programados", api.CreateIngresoProgramado)
+			r.Put("/ingresos-programados/{id}", api.UpdateIngresoProgramado)
+			r.Delete("/ingresos-programados/{id}", api.DeleteIngresoProgramado)
+			r.Post("/ingresos-programados/{id}/recibir", api.RecibirIngresoProgramado)
+			r.Get("/ingresos-programados/{id}/asignaciones", api.ListAsignacionesIngreso)
+			r.Post("/ingresos-programados/{id}/asignaciones", api.CreateAsignacionIngreso)
+			r.Delete("/ingresos-programados/{id}/asignaciones/{asignacionId}", api.DeleteAsignacionIngreso)
+
+			r.Get("/flujo/quincena", api.GetFlujoQuincena)
 
 			r.Get("/resumen", api.GetResumen)
 		})
