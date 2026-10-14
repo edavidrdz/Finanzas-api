@@ -62,8 +62,8 @@ func (a *API) ListIngresos(w http.ResponseWriter, r *http.Request) {
 	out := []Ingreso{}
 	for rows.Next() {
 		var i Ingreso
-		if err := rows.Scan(&i.ID, &i.CategoriaID, &i.Categoria, &i.CuentaID, &i.Cuenta,
-			&i.Descripcion, &i.Monto, &i.Fecha, &i.Periodicidad); err != nil {
+		if err := rows.Scan(&i.ID, &i.CategoriaID, &i.Categoria, &i.Descripcion,
+			&i.CuentaID, &i.Cuenta, &i.Monto, &i.Fecha, &i.Periodicidad); err != nil {
 			httpx.DBError(w, err)
 			return
 		}
