@@ -16,6 +16,7 @@ import (
 	"finanzas-api/internal/db"
 	"finanzas-api/internal/handlers"
 	"finanzas-api/internal/httpx"
+	"finanzas-api/internal/mailer"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -52,7 +53,14 @@ func main() {
 	for _, id := range cfg.GoogleClientIDs {
 		googleClientIDs[id] = struct{}{}
 	}
-	api := &handlers.API{DB: pool, JWTSecret: cfg.JWTSecret, GoogleClientIDs: googleClientIDs, Loc: loc}
+	api := &handlers.API{
+		DB: pool, JWTSecret: cfg.JWTSecret, GoogleClientIDs: googleClientIDs, Loc: loc,
+		SMTP: mailer.SMTPConfig{
+			Host: cfg.SMTPHost, Port: cfg.SMTPPort, Username: cfg.SMTPUsername,
+			Password: cfg.SMTPPassword, From: cfg.SMTPFrom,
+		},
+		PublicAPIURL: cfg.PublicAPIURL,
+	}
 
 	r := chi.NewRouter()
 	corsOrigins := cfg.CORSOrigins
@@ -100,10 +108,14 @@ func main() {
 		r.Post("/auth/register", api.Register)
 		r.Post("/auth/login", api.Login)
 		r.Post("/auth/google", api.GoogleLogin)
+		r.Post("/auth/password/forgot", api.RequestPasswordReset)
+		r.Get("/auth/password/reset", api.ResetPassword)
+		r.Post("/auth/password/reset", api.ResetPassword)
 
 		r.Group(func(r chi.Router) {
 			r.Use(auth.Middleware(cfg.JWTSecret))
 
+			r.Post("/auth/password/change", api.ChangePassword)
 			r.Post("/auth/google/link", api.LinkGoogleAccount)
 			r.Get("/categorias", api.ListCategorias)
 			r.Post("/categorias", api.CreateCategoria)

@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"finanzas-api/internal/httpx"
+	"finanzas-api/internal/mailer"
 )
 
 const dateLayout = "2006-01-02"
@@ -18,6 +19,8 @@ type API struct {
 	JWTSecret       string
 	GoogleClientIDs map[string]struct{}
 	Loc             *time.Location // zona horaria del usuario (APP_TZ)
+	SMTP            mailer.SMTPConfig
+	PublicAPIURL    string
 }
 
 func (a *API) HealthDB(w http.ResponseWriter, r *http.Request) {

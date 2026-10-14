@@ -35,6 +35,7 @@ Al actualizar una instalación existente, ejecuta en el SQL Editor de Neon, en o
 3. `migrations/003_gastos_programados.sql`.
 4. `migrations/004_ingresos_programados_y_flujo.sql`.
 5. `migrations/005_google_auth.sql` para permitir acceso y registro con Google.
+6. `migrations/006_password_reset.sql` para habilitar recuperación segura de contraseña.
 
 La segunda migración agrega cuentas financieras y transferencias sin borrar los gastos
 ni ingresos existentes. Los movimientos anteriores quedan sin cuenta asignada y no se
@@ -59,6 +60,14 @@ registrada con el mismo correo debe iniciar sesión normalmente y vincular Googl
 Para vincularla, la persona debe estar autenticada en esa cuenta y confirmar la cuenta Google;
 el vínculo no se realiza automáticamente por coincidencia de correo.
 
+La sexta migración habilita solicitudes de recuperación con tokens aleatorios de un solo uso,
+guardados como hash y con vencimiento de 30 minutos. Para enviar los correos configura
+`PUBLIC_API_URL`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_FROM` y, cuando el proveedor lo requiera,
+`SMTP_USERNAME` y `SMTP_PASSWORD`. El puerto 587 usa STARTTLS y el 465 TLS implícito. En Gmail,
+usa una contraseña de aplicación, no la contraseña normal de la cuenta. Los enlaces abren una
+página segura de la API para elegir la nueva contraseña. La API limita las solicitudes por cuenta
+y responde con un mensaje genérico para no revelar si un correo está registrado.
+
 El saldo inicial de efectivo, débito y ahorro representa dinero disponible; en una
 cuenta de crédito representa deuda. Los gastos afectan la cuenta seleccionada, y un
 retiro o pago de tarjeta se registra como transferencia para no duplicarlo como gasto.
@@ -70,7 +79,9 @@ retiro o pago de tarjeta se registra como transferencia para no duplicarlo como 
 - Health Check Path: `/health`
 - Variables de entorno: `DATABASE_URL`, `JWT_SECRET`, `APP_TZ` (ej. `America/Mexico_City`),
   `GOOGLE_CLIENT_IDS` (opcional hasta habilitar Google), `CORS_ORIGINS` (orígenes web permitidos,
-  separados por coma; agrega el dominio final del sitio web si se usa Google en web)
+  separados por coma; agrega el dominio final del sitio web si se usa Google en web),
+  `PUBLIC_API_URL` (URL HTTPS pública del servicio), `SMTP_HOST`, `SMTP_PORT`, `SMTP_FROM`,
+  `SMTP_USERNAME` y `SMTP_PASSWORD` para la recuperación por correo.
 
 ## Endpoints (prefijo `/api/v1`, todo con `Authorization: Bearer <token>` salvo auth)
 
@@ -79,6 +90,9 @@ retiro o pago de tarjeta se registra como transferencia para no duplicarlo como 
 | POST | /auth/register, /auth/login | Registro / login (devuelven token) |
 | POST | /auth/google | Valida token Google e inicia sesión o crea una cuenta |
 | POST | /auth/google/link | Vincula Google a la cuenta autenticada |
+| POST | /auth/password/forgot | Solicita un enlace de recuperación por correo |
+| GET/POST | /auth/password/reset | Página web y aplicación de nueva contraseña |
+| POST | /auth/password/change | Cambia la contraseña de la cuenta autenticada |
 | GET/POST/DELETE | /categorias | Categorías (se crean por defecto al registrarse) |
 | GET/POST/PUT/DELETE | /cuentas | Cuentas y saldos (DELETE archiva) |
 | GET/POST | /transferencias | Retiros, traspasos y pagos de tarjeta |
