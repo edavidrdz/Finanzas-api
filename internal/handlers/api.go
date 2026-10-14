@@ -110,3 +110,25 @@ func (a *API) categoriaEsDelUsuario(ctx context.Context, uid string, catID *stri
 		*catID, uid).Scan(&ok)
 	return ok, err
 }
+
+func (a *API) cuentaEsDelUsuario(ctx context.Context, uid string, cuentaID *string) (bool, error) {
+	if cuentaID == nil {
+		return true, nil
+	}
+	var ok bool
+	err := a.DB.QueryRow(ctx,
+		`SELECT EXISTS (SELECT 1 FROM cuentas WHERE id = $1 AND usuario_id = $2 AND activa)`,
+		*cuentaID, uid).Scan(&ok)
+	return ok, err
+}
+
+func (a *API) cuentaAceptaIngreso(ctx context.Context, uid string, cuentaID *string) (bool, error) {
+	if cuentaID == nil {
+		return true, nil
+	}
+	var ok bool
+	err := a.DB.QueryRow(ctx,
+		`SELECT EXISTS (SELECT 1 FROM cuentas WHERE id = $1 AND usuario_id = $2 AND activa AND tipo <> 'credito')`,
+		*cuentaID, uid).Scan(&ok)
+	return ok, err
+}

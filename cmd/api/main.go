@@ -99,6 +99,13 @@ func main() {
 			r.Post("/categorias", api.CreateCategoria)
 			r.Delete("/categorias/{id}", api.DeleteCategoria)
 
+			r.Get("/cuentas", api.ListCuentas)
+			r.Post("/cuentas", api.CreateCuenta)
+			r.Put("/cuentas/{id}", api.UpdateCuenta)
+			r.Delete("/cuentas/{id}", api.DeleteCuenta)
+			r.Get("/transferencias", api.ListTransferencias)
+			r.Post("/transferencias", api.CreateTransferencia)
+
 			r.Get("/gastos", api.ListGastos)
 			r.Post("/gastos", api.CreateGasto)
 			r.Put("/gastos/{id}", api.UpdateGasto)

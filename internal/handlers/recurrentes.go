@@ -15,6 +15,8 @@ type Recurrente struct {
 	ID             string  `json:"id"`
 	CategoriaID    *string `json:"categoria_id"`
 	Categoria      *string `json:"categoria,omitempty"`
+	CuentaID       *string `json:"cuenta_id"`
+	Cuenta         *string `json:"cuenta,omitempty"`
 	Nombre         string  `json:"nombre"`
 	Monto          float64 `json:"monto"`
 	DiaVencimiento int     `json:"dia_vencimiento"`
@@ -23,6 +25,7 @@ type Recurrente struct {
 
 type recurrenteInput struct {
 	CategoriaID    *string `json:"categoria_id"`
+	CuentaID       *string `json:"cuenta_id"`
 	Nombre         string  `json:"nombre"`
 	Monto          float64 `json:"monto"`
 	DiaVencimiento int     `json:"dia_vencimiento"`
@@ -30,32 +33,44 @@ type recurrenteInput struct {
 }
 
 // validar normaliza el input y devuelve un mensaje de error (vacío si todo está bien).
-func (a *API) validarRecurrente(r *http.Request, uid string, in *recurrenteInput) string {
+func (a *API) validarRecurrente(r *http.Request, uid string, in *recurrenteInput) (string, error) {
 	in.Nombre = strings.TrimSpace(in.Nombre)
 	in.CategoriaID = nilIfEmpty(in.CategoriaID)
+	in.CuentaID = nilIfEmpty(in.CuentaID)
 	if in.Nombre == "" || len(in.Nombre) > 100 {
-		return "nombre es obligatorio (máx. 100 caracteres)"
+		return "nombre es obligatorio (máx. 100 caracteres)", nil
 	}
 	if in.Monto <= 0 || in.Monto > 9999999999 {
-		return "monto debe ser mayor a 0"
+		return "monto debe ser mayor a 0", nil
 	}
 	if in.DiaVencimiento < 1 || in.DiaVencimiento > 31 {
-		return "dia_vencimiento debe estar entre 1 y 31"
+		return "dia_vencimiento debe estar entre 1 y 31", nil
 	}
 	ok, err := a.categoriaEsDelUsuario(r.Context(), uid, in.CategoriaID)
-	if err != nil || !ok {
-		return "categoría inválida"
+	if err != nil {
+		return "", err
 	}
-	return ""
+	if !ok {
+		return "categoría inválida", nil
+	}
+	ok, err = a.cuentaEsDelUsuario(r.Context(), uid, in.CuentaID)
+	if err != nil {
+		return "", err
+	}
+	if !ok {
+		return "cuenta inválida", nil
+	}
+	return "", nil
 }
 
 func (a *API) ListRecurrentes(w http.ResponseWriter, r *http.Request) {
 	uid := auth.UserID(r.Context())
 	rows, err := a.DB.Query(r.Context(), `
-		SELECT r.id::text, r.categoria_id::text, c.nombre, r.nombre,
+		SELECT r.id::text, r.categoria_id::text, c.nombre, r.cuenta_id::text, cta.nombre, r.nombre,
 		       r.monto::float8, r.dia_vencimiento::int, r.activo
 		FROM gastos_recurrentes r
 		LEFT JOIN categorias c ON c.id = r.categoria_id
+		LEFT JOIN cuentas cta ON cta.id = r.cuenta_id
 		WHERE r.usuario_id = $1
 		ORDER BY r.dia_vencimiento, r.nombre`, uid)
 	if err != nil {
@@ -66,7 +81,8 @@ func (a *API) ListRecurrentes(w http.ResponseWriter, r *http.Request) {
 	out := []Recurrente{}
 	for rows.Next() {
 		var x Recurrente
-		if err := rows.Scan(&x.ID, &x.CategoriaID, &x.Categoria, &x.Nombre, &x.Monto, &x.DiaVencimiento, &x.Activo); err != nil {
+		if err := rows.Scan(&x.ID, &x.CategoriaID, &x.Categoria, &x.CuentaID, &x.Cuenta,
+			&x.Nombre, &x.Monto, &x.DiaVencimiento, &x.Activo); err != nil {
 			httpx.DBError(w, err)
 			return
 		}
@@ -85,16 +101,21 @@ func (a *API) CreateRecurrente(w http.ResponseWriter, r *http.Request) {
 	if !httpx.Decode(w, r, &in) {
 		return
 	}
-	if msg := a.validarRecurrente(r, uid, &in); msg != "" {
+	msg, err := a.validarRecurrente(r, uid, &in)
+	if err != nil {
+		httpx.DBError(w, err)
+		return
+	}
+	if msg != "" {
 		httpx.Error(w, http.StatusBadRequest, msg)
 		return
 	}
 	activo := in.Activo == nil || *in.Activo
-	x := Recurrente{CategoriaID: in.CategoriaID, Nombre: in.Nombre, Monto: in.Monto, DiaVencimiento: in.DiaVencimiento, Activo: activo}
-	err := a.DB.QueryRow(r.Context(), `
-		INSERT INTO gastos_recurrentes (usuario_id, categoria_id, nombre, monto, dia_vencimiento, activo)
-		VALUES ($1, $2, $3, $4::float8::numeric, $5, $6) RETURNING id::text`,
-		uid, in.CategoriaID, in.Nombre, in.Monto, in.DiaVencimiento, activo).Scan(&x.ID)
+	x := Recurrente{CategoriaID: in.CategoriaID, CuentaID: in.CuentaID, Nombre: in.Nombre, Monto: in.Monto, DiaVencimiento: in.DiaVencimiento, Activo: activo}
+	err = a.DB.QueryRow(r.Context(), `
+		INSERT INTO gastos_recurrentes (usuario_id, categoria_id, cuenta_id, nombre, monto, dia_vencimiento, activo)
+		VALUES ($1, $2, $3, $4, $5::float8::numeric, $6, $7) RETURNING id::text`,
+		uid, in.CategoriaID, in.CuentaID, in.Nombre, in.Monto, in.DiaVencimiento, activo).Scan(&x.ID)
 	if err != nil {
 		httpx.DBError(w, err)
 		return
@@ -109,16 +130,21 @@ func (a *API) UpdateRecurrente(w http.ResponseWriter, r *http.Request) {
 	if !httpx.Decode(w, r, &in) {
 		return
 	}
-	if msg := a.validarRecurrente(r, uid, &in); msg != "" {
+	msg, err := a.validarRecurrente(r, uid, &in)
+	if err != nil {
+		httpx.DBError(w, err)
+		return
+	}
+	if msg != "" {
 		httpx.Error(w, http.StatusBadRequest, msg)
 		return
 	}
 	activo := in.Activo == nil || *in.Activo
 	tag, err := a.DB.Exec(r.Context(), `
 		UPDATE gastos_recurrentes
-		SET categoria_id = $3, nombre = $4, monto = $5::float8::numeric, dia_vencimiento = $6, activo = $7
+		SET categoria_id = $3, cuenta_id = $4, nombre = $5, monto = $6::float8::numeric, dia_vencimiento = $7, activo = $8
 		WHERE id = $1 AND usuario_id = $2`,
-		id, uid, in.CategoriaID, in.Nombre, in.Monto, in.DiaVencimiento, activo)
+		id, uid, in.CategoriaID, in.CuentaID, in.Nombre, in.Monto, in.DiaVencimiento, activo)
 	if err != nil {
 		httpx.DBError(w, err)
 		return
@@ -127,7 +153,7 @@ func (a *API) UpdateRecurrente(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusNotFound, "no encontrado")
 		return
 	}
-	httpx.JSON(w, http.StatusOK, Recurrente{ID: id, CategoriaID: in.CategoriaID, Nombre: in.Nombre, Monto: in.Monto, DiaVencimiento: in.DiaVencimiento, Activo: activo})
+	httpx.JSON(w, http.StatusOK, Recurrente{ID: id, CategoriaID: in.CategoriaID, CuentaID: in.CuentaID, Nombre: in.Nombre, Monto: in.Monto, DiaVencimiento: in.DiaVencimiento, Activo: activo})
 }
 
 func (a *API) DeleteRecurrente(w http.ResponseWriter, r *http.Request) {
@@ -155,8 +181,8 @@ func (a *API) GenerarRecurrentes(w http.ResponseWriter, r *http.Request) {
 	}
 	diasMes := primero.AddDate(0, 1, -1).Day()
 	tag, err := a.DB.Exec(r.Context(), `
-		INSERT INTO gastos (usuario_id, categoria_id, recurrente_id, descripcion, monto, fecha)
-		SELECT r.usuario_id, r.categoria_id, r.id, r.nombre, r.monto,
+		INSERT INTO gastos (usuario_id, categoria_id, cuenta_id, recurrente_id, descripcion, monto, fecha)
+		SELECT r.usuario_id, r.categoria_id, r.cuenta_id, r.id, r.nombre, r.monto,
 		       $2::date + (LEAST(r.dia_vencimiento::int, $3::int) - 1)
 		FROM gastos_recurrentes r
 		WHERE r.usuario_id = $1 AND r.activo

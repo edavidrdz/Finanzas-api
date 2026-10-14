@@ -15,6 +15,8 @@ type Gasto struct {
 	CategoriaID  *string `json:"categoria_id"`
 	Categoria    *string `json:"categoria,omitempty"`
 	RecurrenteID *string `json:"recurrente_id,omitempty"`
+	CuentaID     *string `json:"cuenta_id"`
+	Cuenta       *string `json:"cuenta,omitempty"`
 	Descripcion  string  `json:"descripcion"`
 	Monto        float64 `json:"monto"`
 	Fecha        string  `json:"fecha"`
@@ -22,6 +24,7 @@ type Gasto struct {
 
 type gastoInput struct {
 	CategoriaID *string `json:"categoria_id"`
+	CuentaID    *string `json:"cuenta_id"`
 	Descripcion string  `json:"descripcion"`
 	Monto       float64 `json:"monto"`
 	Fecha       string  `json:"fecha"` // AAAA-MM-DD; si va vacía, se usa hoy
@@ -35,9 +38,10 @@ func (a *API) ListGastos(w http.ResponseWriter, r *http.Request) {
 	}
 	rows, err := a.DB.Query(r.Context(), `
 		SELECT g.id::text, g.categoria_id::text, c.nombre, g.recurrente_id::text,
-		       g.descripcion, g.monto::float8, to_char(g.fecha, 'YYYY-MM-DD')
+		       g.cuenta_id::text, cta.nombre, g.descripcion, g.monto::float8, to_char(g.fecha, 'YYYY-MM-DD')
 		FROM gastos g
 		LEFT JOIN categorias c ON c.id = g.categoria_id
+		LEFT JOIN cuentas cta ON cta.id = g.cuenta_id
 		WHERE g.usuario_id = $1 AND g.fecha BETWEEN $2 AND $3
 		ORDER BY g.fecha DESC, g.creado_en DESC
 		LIMIT 500`, uid, desde, hasta)
@@ -49,7 +53,8 @@ func (a *API) ListGastos(w http.ResponseWriter, r *http.Request) {
 	out := []Gasto{}
 	for rows.Next() {
 		var g Gasto
-		if err := rows.Scan(&g.ID, &g.CategoriaID, &g.Categoria, &g.RecurrenteID, &g.Descripcion, &g.Monto, &g.Fecha); err != nil {
+		if err := rows.Scan(&g.ID, &g.CategoriaID, &g.Categoria, &g.RecurrenteID,
+			&g.CuentaID, &g.Cuenta, &g.Descripcion, &g.Monto, &g.Fecha); err != nil {
 			httpx.DBError(w, err)
 			return
 		}
@@ -75,6 +80,7 @@ func (a *API) CreateGasto(w http.ResponseWriter, r *http.Request) {
 	}
 	in.Descripcion = strings.TrimSpace(in.Descripcion)
 	in.CategoriaID = nilIfEmpty(in.CategoriaID)
+	in.CuentaID = nilIfEmpty(in.CuentaID)
 	if ok, err := a.categoriaEsDelUsuario(r.Context(), uid, in.CategoriaID); err != nil {
 		httpx.DBError(w, err)
 		return
@@ -82,12 +88,19 @@ func (a *API) CreateGasto(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusBadRequest, "categoría inválida")
 		return
 	}
+	if ok, err := a.cuentaEsDelUsuario(r.Context(), uid, in.CuentaID); err != nil {
+		httpx.DBError(w, err)
+		return
+	} else if !ok {
+		httpx.Error(w, http.StatusBadRequest, "cuenta inválida")
+		return
+	}
 
-	g := Gasto{CategoriaID: in.CategoriaID, Descripcion: in.Descripcion, Monto: in.Monto, Fecha: fecha.Format(dateLayout)}
+	g := Gasto{CategoriaID: in.CategoriaID, CuentaID: in.CuentaID, Descripcion: in.Descripcion, Monto: in.Monto, Fecha: fecha.Format(dateLayout)}
 	err := a.DB.QueryRow(r.Context(), `
-		INSERT INTO gastos (usuario_id, categoria_id, descripcion, monto, fecha)
-		VALUES ($1, $2, $3, $4::float8::numeric, $5) RETURNING id::text`,
-		uid, in.CategoriaID, in.Descripcion, in.Monto, fecha).Scan(&g.ID)
+		INSERT INTO gastos (usuario_id, categoria_id, cuenta_id, descripcion, monto, fecha)
+		VALUES ($1, $2, $3, $4, $5::float8::numeric, $6) RETURNING id::text`,
+		uid, in.CategoriaID, in.CuentaID, in.Descripcion, in.Monto, fecha).Scan(&g.ID)
 	if err != nil {
 		httpx.DBError(w, err)
 		return
@@ -109,6 +122,7 @@ func (a *API) UpdateGasto(w http.ResponseWriter, r *http.Request) {
 	}
 	in.Descripcion = strings.TrimSpace(in.Descripcion)
 	in.CategoriaID = nilIfEmpty(in.CategoriaID)
+	in.CuentaID = nilIfEmpty(in.CuentaID)
 	if ok, err := a.categoriaEsDelUsuario(r.Context(), uid, in.CategoriaID); err != nil {
 		httpx.DBError(w, err)
 		return
@@ -116,10 +130,17 @@ func (a *API) UpdateGasto(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusBadRequest, "categoría inválida")
 		return
 	}
+	if ok, err := a.cuentaEsDelUsuario(r.Context(), uid, in.CuentaID); err != nil {
+		httpx.DBError(w, err)
+		return
+	} else if !ok {
+		httpx.Error(w, http.StatusBadRequest, "cuenta inválida")
+		return
+	}
 	tag, err := a.DB.Exec(r.Context(), `
-		UPDATE gastos SET categoria_id = $3, descripcion = $4, monto = $5::float8::numeric, fecha = $6
+		UPDATE gastos SET categoria_id = $3, cuenta_id = $4, descripcion = $5, monto = $6::float8::numeric, fecha = $7
 		WHERE id = $1 AND usuario_id = $2`,
-		id, uid, in.CategoriaID, in.Descripcion, in.Monto, fecha)
+		id, uid, in.CategoriaID, in.CuentaID, in.Descripcion, in.Monto, fecha)
 	if err != nil {
 		httpx.DBError(w, err)
 		return
@@ -128,7 +149,7 @@ func (a *API) UpdateGasto(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusNotFound, "no encontrado")
 		return
 	}
-	httpx.JSON(w, http.StatusOK, Gasto{ID: id, CategoriaID: in.CategoriaID, Descripcion: in.Descripcion, Monto: in.Monto, Fecha: fecha.Format(dateLayout)})
+	httpx.JSON(w, http.StatusOK, Gasto{ID: id, CategoriaID: in.CategoriaID, CuentaID: in.CuentaID, Descripcion: in.Descripcion, Monto: in.Monto, Fecha: fecha.Format(dateLayout)})
 }
 
 func (a *API) DeleteGasto(w http.ResponseWriter, r *http.Request) {
