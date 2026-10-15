@@ -178,7 +178,7 @@ func (a *API) RequestPasswordReset(w http.ResponseWriter, r *http.Request) {
 	if err := a.SMTP.Send(r.Context(), email, "Recupera tu contraseña de Mis Finanzas", body); err != nil {
 		log.Printf("no se pudo enviar correo de recuperación: %v", err)
 		_, _ = a.DB.Exec(r.Context(), `DELETE FROM password_reset_tokens WHERE token_hash = $1`, tokenHash)
-		httpx.Error(w, http.StatusServiceUnavailable, "no se pudo enviar el correo de recuperación; inténtalo más tarde")
+		httpx.JSON(w, http.StatusOK, map[string]string{"message": passwordResetMessage})
 		return
 	}
 	httpx.JSON(w, http.StatusOK, map[string]string{"message": passwordResetMessage})
@@ -209,12 +209,25 @@ func (a *API) ResetPassword(w http.ResponseWriter, r *http.Request) {
 		resetPasswordError(w, r, http.StatusBadRequest, err.Error(), in.Token)
 		return
 	}
+	tokenHash := hashResetToken(in.Token)
+	var tokenExists bool
+	if err := a.DB.QueryRow(r.Context(), `
+		SELECT EXISTS (
+			SELECT 1 FROM password_reset_tokens
+			WHERE token_hash = $1 AND usado_en IS NULL AND expira_en > now()
+		)`, tokenHash).Scan(&tokenExists); err != nil {
+		httpx.DBError(w, err)
+		return
+	}
+	if !tokenExists {
+		resetPasswordError(w, r, http.StatusBadRequest, "El enlace no es válido o ya venció. Solicita uno nuevo.", "")
+		return
+	}
 	hash, err := auth.HashPassword(in.NewPassword)
 	if err != nil {
 		httpx.Error(w, http.StatusInternalServerError, "no se pudo guardar la contraseña")
 		return
 	}
-	tokenHash := hashResetToken(in.Token)
 	tx, err := a.DB.Begin(r.Context())
 	if err != nil {
 		httpx.DBError(w, err)

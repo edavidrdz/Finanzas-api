@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"mime"
 	"net"
 	"net/mail"
 	"net/smtp"
@@ -23,6 +24,18 @@ type SMTPConfig struct {
 
 func (c SMTPConfig) Configured() bool {
 	return c.Host != "" && c.Port != "" && c.From != ""
+}
+
+func sanitizeHeaderValue(value string) string {
+	value = strings.ReplaceAll(value, "\r", "")
+	value = strings.ReplaceAll(value, "\n", "")
+	return value
+}
+
+func normalizeBody(value string) string {
+	value = strings.ReplaceAll(value, "\r\n", "\n")
+	value = strings.ReplaceAll(value, "\r", "\n")
+	return strings.ReplaceAll(value, "\n", "\r\n")
 }
 
 func (c SMTPConfig) Send(ctx context.Context, to, subject, body string) error {
@@ -94,12 +107,12 @@ func (c SMTPConfig) Send(ctx context.Context, to, subject, body string) error {
 	message := strings.Join([]string{
 		"From: " + fromAddress.String(),
 		"To: " + toAddress.String(),
-		"Subject: " + subject,
+		"Subject: " + mime.QEncoding.Encode("UTF-8", sanitizeHeaderValue(subject)),
 		"MIME-Version: 1.0",
 		"Content-Type: text/plain; charset=UTF-8",
 		"Content-Transfer-Encoding: 8bit",
 		"",
-		body,
+		normalizeBody(body),
 	}, "\r\n")
 	if _, err := fmt.Fprint(writer, message); err != nil {
 		_ = writer.Close()
