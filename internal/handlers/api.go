@@ -19,7 +19,7 @@ type API struct {
 	JWTSecret       string
 	GoogleClientIDs map[string]struct{}
 	Loc             *time.Location // zona horaria del usuario (APP_TZ)
-	SMTP            mailer.SMTPConfig
+	Resend          mailer.ResendConfig
 	PublicAPIURL    string
 }
 

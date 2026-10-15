@@ -61,12 +61,17 @@ Para vincularla, la persona debe estar autenticada en esa cuenta y confirmar la 
 el vínculo no se realiza automáticamente por coincidencia de correo.
 
 La sexta migración habilita solicitudes de recuperación con tokens aleatorios de un solo uso,
-guardados como hash y con vencimiento de 30 minutos. Para enviar los correos configura
-`PUBLIC_API_URL`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_FROM` y, cuando el proveedor lo requiera,
-`SMTP_USERNAME` y `SMTP_PASSWORD`. El puerto 587 usa STARTTLS y el 465 TLS implícito. En Gmail,
-usa una contraseña de aplicación, no la contraseña normal de la cuenta. Los enlaces abren una
-página segura de la API para elegir la nueva contraseña. La API limita las solicitudes por cuenta
-y responde con un mensaje genérico para no revelar si un correo está registrado.
+guardados como hash y con vencimiento de 30 minutos. Para enviar correos mediante la API HTTPS de
+Resend configura `PUBLIC_API_URL`, `RESEND_API_KEY` y `EMAIL_FROM`. Verifica el dominio remitente
+en Resend antes de usar una dirección propia. Los enlaces abren una página segura de la API para
+elegir la nueva contraseña. La API limita las solicitudes por cuenta y responde con un mensaje
+genérico para no revelar si un correo está registrado.
+
+Para configurar Resend, crea una API key y verifica un dominio remitente en su panel. Agrega
+los registros DNS que Resend indique en el proveedor de tu dominio y espera a que el dominio
+aparezca verificado. En Render configura `RESEND_API_KEY` con la API key y `EMAIL_FROM` con una
+dirección de ese dominio verificado, por ejemplo `Mis Finanzas <no-reply@tudominio.com>`.
+`onboarding@resend.dev` solo sirve para pruebas limitadas y no debe usarse como remitente final.
 
 El saldo inicial de efectivo, débito y ahorro representa dinero disponible; en una
 cuenta de crédito representa deuda. Los gastos afectan la cuenta seleccionada, y un
@@ -80,8 +85,9 @@ retiro o pago de tarjeta se registra como transferencia para no duplicarlo como 
 - Variables de entorno: `DATABASE_URL`, `JWT_SECRET`, `APP_TZ` (ej. `America/Mexico_City`),
   `GOOGLE_CLIENT_IDS` (opcional hasta habilitar Google), `CORS_ORIGINS` (orígenes web permitidos,
   separados por coma; agrega el dominio final del sitio web si se usa Google en web),
-  `PUBLIC_API_URL` (URL HTTPS pública del servicio), `SMTP_HOST`, `SMTP_PORT`, `SMTP_FROM`,
-  `SMTP_USERNAME` y `SMTP_PASSWORD` para la recuperación por correo.
+  `PUBLIC_API_URL` (URL HTTPS pública del servicio), `RESEND_API_KEY` (API key secreta de Resend)
+  y `EMAIL_FROM` (dirección remitente verificada en Resend)
+  para la recuperación por correo.
 
 ## Endpoints (prefijo `/api/v1`, todo con `Authorization: Bearer <token>` salvo auth)
 

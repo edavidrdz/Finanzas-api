@@ -84,7 +84,7 @@ var passwordResetPage = template.Must(template.New("password-reset").Parse(`<!do
 </html>`))
 
 func (a *API) RequestPasswordReset(w http.ResponseWriter, r *http.Request) {
-	if !a.SMTP.Configured() || a.PublicAPIURL == "" {
+	if !a.Resend.Configured() || a.PublicAPIURL == "" {
 		httpx.Error(w, http.StatusServiceUnavailable, "el envío de correos no está configurado")
 		return
 	}
@@ -175,7 +175,7 @@ func (a *API) RequestPasswordReset(w http.ResponseWriter, r *http.Request) {
 			"Si no solicitaste el cambio, ignora este mensaje. Tu contraseña no cambiará.\r\n",
 		resetURL.String(),
 	)
-	if err := a.SMTP.Send(r.Context(), email, "Recupera tu contraseña de Mis Finanzas", body); err != nil {
+	if err := a.Resend.Send(r.Context(), email, "Recupera tu contraseña de Mis Finanzas", body); err != nil {
 		log.Printf("no se pudo enviar correo de recuperación: %v", err)
 		_, _ = a.DB.Exec(r.Context(), `DELETE FROM password_reset_tokens WHERE token_hash = $1`, tokenHash)
 		httpx.JSON(w, http.StatusOK, map[string]string{"message": passwordResetMessage})

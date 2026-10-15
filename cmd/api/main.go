@@ -55,23 +55,25 @@ func main() {
 	}
 	api := &handlers.API{
 		DB: pool, JWTSecret: cfg.JWTSecret, GoogleClientIDs: googleClientIDs, Loc: loc,
-		SMTP: mailer.SMTPConfig{
-			Host: cfg.SMTPHost, Port: cfg.SMTPPort, Username: cfg.SMTPUsername,
-			Password: cfg.SMTPPassword, From: cfg.SMTPFrom,
+		Resend: mailer.ResendConfig{
+			APIKey: cfg.ResendAPIKey,
+			From:   cfg.EmailFrom,
 		},
 		PublicAPIURL: cfg.PublicAPIURL,
 	}
 
 	r := chi.NewRouter()
 	corsOrigins := cfg.CORSOrigins
-	if len(corsOrigins) == 0 {
-		corsOrigins = []string{
-			"http://localhost:8081",
-			"http://localhost:19006",
-			"http://localhost:3000",
-			"https://localhost:8081",
-		}
-	}
+	corsOrigins = append(corsOrigins,
+		"http://localhost:8081",
+		"http://localhost:8082",
+		"http://localhost:8083",
+		"http://localhost:19006",
+		"http://localhost:3000",
+		"https://localhost:8081",
+		"https://localhost:8082",
+		"https://localhost:8083",
+	)
 
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins: corsOrigins,
