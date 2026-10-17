@@ -36,6 +36,7 @@ Al actualizar una instalación existente, ejecuta en el SQL Editor de Neon, en o
 4. `migrations/004_ingresos_programados_y_flujo.sql`.
 5. `migrations/005_google_auth.sql` para permitir acceso y registro con Google.
 6. `migrations/006_password_reset.sql` para habilitar recuperación segura de contraseña.
+7. `migrations/007_offline_sync.sql` para recibos idempotentes de operaciones offline y tombstones de borrados remotos.
 
 La segunda migración agrega cuentas financieras y transferencias sin borrar los gastos
 ni ingresos existentes. Los movimientos anteriores quedan sin cuenta asignada y no se
@@ -116,6 +117,8 @@ retiro o pago de tarjeta se registra como transferencia para no duplicarlo como 
 | GET/POST/DELETE | /ingresos-programados/{id}/asignaciones | Asignar el ingreso esperado a un gasto programado |
 | GET | /flujo/quincena?ingreso_id=... | Flujo real y sobrante desde una nómina quincenal |
 | GET | /resumen?mes=2026-10 | Ingresos, gastos, balance y gasto por categoría |
+| GET | /sync/snapshot | Snapshot completo de datos financieros y borrados remotos |
+| POST | /sync/push | Entrega de operaciones offline en lote, idempotente y con control de conflictos |
 
 ## Ejemplos
 
@@ -135,3 +138,117 @@ curl -X POST $URL/api/v1/recurrentes -H "Authorization: Bearer $TOKEN" -H 'Conte
 - Render Free "duerme" el servicio: la primera petición tras inactividad tarda ~30 s.
 - Los recurrentes se generan bajo demanda (`/recurrentes/generar`) en lugar de con un cron.
 - Pendientes recomendados antes de publicar: límite de intentos de login, refresh tokens y pruebas.
+
+## Sincronización offline (app nativa)
+
+Ambas rutas requieren `Authorization: Bearer <token>`. El snapshot es una respuesta JSON con
+arreglos (vacíos cuando no hay registros) para estas colecciones:
+
+```json
+{
+  "categories": [],
+  "accounts": [],
+  "expenses": [],
+  "incomes": [],
+  "transfers": [],
+  "recurring_services": [],
+  "scheduled_expenses": [],
+  "scheduled_expense_allocations": [],
+  "scheduled_expense_payments": [],
+  "scheduled_incomes": [],
+  "scheduled_income_assignments": [],
+  "balance_adjustments": [],
+  "remote_deletions": []
+}
+```
+
+Los nombres son estables y `snake_case`. Los objetos financieros usan los nombres de campos
+actuales de la API (por ejemplo `nombre`, `monto`, `fecha`, `cuenta_id`) y omiten `usuario_id`
+y `creado_en`. `accounts` también incluye `saldo_actual` calculado en el servidor.
+`scheduled_expense_payments` es el subconjunto de `expenses` con `programado_id` no nulo;
+el pago real permanece también en `expenses`. `remote_deletions` contiene
+`{ "entity": "...", "entity_id": "<uuid>", "deleted_at": "<timestamp>" }`. Los borrados
+físicos hechos por rutas existentes y por sync se registran en esta colección; reinsertar el
+mismo UUID elimina su tombstone. Las rutas `DELETE` que archivan/desactivan (cuentas, servicios
+recurrentes, gastos e ingresos programados) conservan el registro en su colección con
+`activa: false`; no son tombstones.
+
+`POST /api/v1/sync/push` acepta de 1 a 100 operaciones por petición (cuerpo máximo 1 MiB):
+
+```json
+{
+  "operations": [{
+    "op_id": "UUID estable de esta operación",
+    "entity": "categories",
+    "action": "create",
+    "entity_id": "UUID estable del registro",
+    "payload": { "nombre": "Casa", "tipo": "gasto" },
+    "base_record": null
+  }]
+}
+```
+
+`entity` admite exactamente las colecciones snapshot excepto `remote_deletions`.
+`action` admite `create`, `update` y `delete`; `payload` usa los campos mutables de la entidad
+en el formato de la API. En create/update `entity_id` es el `id` que se almacenará; si
+`payload.id` aparece, debe coincidir. En delete se requiere `payload: {}`. Update requiere
+`base_record`: la versión completa del objeto tal como vino del snapshot, sin campos derivados
+(`saldo_actual`), `usuario_id` ni `creado_en`. Si el registro cambió desde esa versión se
+devuelve `conflict` sin sobrescribir los datos. Todas las referencias deben pertenecer al
+usuario autenticado. `scheduled_expense_payments` acepta gastos programados vinculados a un
+vencimiento (`programado_id` y `programado_fecha`); otros pagos programados aparecen como
+gastos normales en `expenses` y el subconjunto también en `scheduled_expense_payments`.
+Al crear un gasto vinculado, sync comprueba que sea el vencimiento vigente y avanza o desactiva
+el gasto programado en la misma operación; la fecha del vencimiento no se puede cambiar al editar
+el pago.
+
+Campos admitidos en `payload` (todos los objetos snapshot incluyen además `id`; los campos con
+valores por defecto pueden omitirse al crear cuando la restricción de la tabla lo permita):
+
+| `entity` | Campos mutables |
+|---|---|
+| `categories` | `nombre`, `tipo` |
+| `accounts` | `nombre`, `institucion`, `tipo`, `saldo_inicial`, `fecha_saldo_inicial`, `limite_credito`, `activa` |
+| `expenses` | `categoria_id`, `recurrente_id`, `descripcion`, `monto`, `fecha`, `cuenta_id`, `programado_id`, `programado_fecha` |
+| `incomes` | `categoria_id`, `descripcion`, `monto`, `fecha`, `periodicidad`, `cuenta_id`, `ingreso_programado_id`, `programado_fecha` |
+| `transfers` | `cuenta_origen_id`, `cuenta_destino_id`, `descripcion`, `monto`, `fecha` |
+| `recurring_services` | `categoria_id`, `cuenta_id`, `nombre`, `monto`, `dia_vencimiento`, `activo` |
+| `scheduled_expenses` | `categoria_id`, `cuenta_id`, `nombre`, `monto`, `fecha_proximo_pago`, `dia_vencimiento`, `frecuencia`, `activo` |
+| `scheduled_expense_allocations` | `programado_id`, `fecha_programada`, `monto`, `fecha`, `ingreso_programado_id`, `ingreso_fecha_programada` |
+| `scheduled_expense_payments` | los campos de `expenses` |
+| `scheduled_incomes` | `categoria_id`, `cuenta_id`, `nombre`, `monto`, `fecha_proximo_ingreso`, `dia_ingreso`, `frecuencia`, `certeza`, `activo` |
+| `scheduled_income_assignments` | `ingreso_programado_id`, `fecha_ingreso_programada`, `gasto_programado_id`, `fecha_gasto_programada`, `monto` |
+| `balance_adjustments` | `cuenta_id`, `monto`, `fecha`, `motivo` |
+
+Los nombres de campo del payload conservan los nombres en español de las rutas existentes. Las
+fechas son `YYYY-MM-DD`, las referencias UUID deben pertenecer al mismo usuario y los importes
+usan los límites y validaciones ya definidos por la base de datos.
+
+La respuesta es siempre `200` para el lote procesado; cada elemento informa su resultado:
+
+```json
+{
+  "results": [{
+    "op_id": "UUID de operación",
+    "status": "applied",
+    "entity": "categories",
+    "entity_id": "UUID del registro"
+  }]
+}
+```
+
+Los estados posibles son `applied`, `duplicate`, `conflict` y `rejected`; `error` solo aparece
+en resultados distintos de `applied`/`duplicate`. Reintentar el mismo `op_id` y contenido
+después de aplicarlo devuelve `duplicate`. Cada operación del lote se confirma de manera
+independiente y en orden: una operación inválida/conflictiva no revierte las demás. Para
+refrescar conflictos o reconciliar borrados, vuelva a solicitar el snapshot. El snapshot es
+completo (sin cursor ni paginación); los tombstones se conservan hasta que se restaura el mismo
+UUID o se elimina la cuenta.
+
+`results` confirma la operación y no incluye copias de registros derivados. Los movimientos
+reales se sincronizan en sus colecciones (`expenses`/`scheduled_expense_payments` e `incomes`);
+los ajustes de saldo son registros explícitos en `balance_adjustments`. Crear un `income` con
+`ingreso_programado_id` comprueba el vencimiento vigente, convierte sus asignaciones vigentes
+en apartados y avanza o desactiva el ingreso programado en la misma operación. Los apartados
+resultantes se recuperan desde `scheduled_expense_allocations` en el snapshot; no se incluyen
+en el objeto de resultado de push.

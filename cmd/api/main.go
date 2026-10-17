@@ -117,6 +117,9 @@ func main() {
 		r.Group(func(r chi.Router) {
 			r.Use(auth.Middleware(cfg.JWTSecret))
 
+			r.Get("/sync/snapshot", api.GetSyncSnapshot)
+			r.Post("/sync/push", api.PushSync)
+
 			r.Post("/auth/password/change", api.ChangePassword)
 			r.Post("/auth/google/link", api.LinkGoogleAccount)
 			r.Get("/categorias", api.ListCategorias)
