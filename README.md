@@ -37,6 +37,7 @@ Al actualizar una instalación existente, ejecuta en el SQL Editor de Neon, en o
 5. `migrations/005_google_auth.sql` para permitir acceso y registro con Google.
 6. `migrations/006_password_reset.sql` para habilitar recuperación segura de contraseña.
 7. `migrations/007_offline_sync.sql` para recibos idempotentes de operaciones offline y tombstones de borrados remotos.
+8. `migrations/008_gastos_pendientes_y_ubicacion.sql` para gastos pendientes y ubicaciones.
 
 La segunda migración agrega cuentas financieras y transferencias sin borrar los gastos
 ni ingresos existentes. Los movimientos anteriores quedan sin cuenta asignada y no se
@@ -103,7 +104,10 @@ retiro o pago de tarjeta se registra como transferencia para no duplicarlo como 
 | GET/POST/DELETE | /categorias | Categorías (se crean por defecto al registrarse) |
 | GET/POST/PUT/DELETE | /cuentas | Cuentas y saldos (DELETE archiva) |
 | GET/POST | /transferencias | Retiros, traspasos y pagos de tarjeta |
-| GET/POST | /gastos, PUT/DELETE /gastos/{id} | Gastos. Filtro: `?desde=&hasta=` (AAAA-MM-DD) |
+| GET/POST | /gastos, PUT/DELETE /gastos/{id} | Gastos. Filtro: `?desde=&hasta=` (AAAA-MM-DD); acepta ubicación opcional |
+| GET/POST | /gastos/pendientes | Listar o iniciar gastos pendientes con ubicación |
+| PUT/DELETE | /gastos/pendientes/{id} | Actualizar o eliminar un gasto pendiente |
+| POST | /gastos/pendientes/{id}/completar | Convierte el pendiente en gasto real de forma atómica |
 | GET/POST | /ingresos, PUT/DELETE /ingresos/{id} | Ingresos / nómina |
 | GET/POST | /recurrentes, PUT/DELETE /recurrentes/{id} | Servicios y gastos fijos mensuales |
 | POST | /recurrentes/generar?mes=2026-10 | Crea los gastos del mes (idempotente) |

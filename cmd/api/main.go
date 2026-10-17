@@ -136,6 +136,11 @@ func main() {
 
 			r.Get("/gastos", api.ListGastos)
 			r.Post("/gastos", api.CreateGasto)
+			r.Get("/gastos/pendientes", api.ListGastosPendientes)
+			r.Post("/gastos/pendientes", api.CreateGastoPendiente)
+			r.Put("/gastos/pendientes/{id}", api.UpdateGastoPendiente)
+			r.Post("/gastos/pendientes/{id}/completar", api.CompleteGastoPendiente)
+			r.Delete("/gastos/pendientes/{id}", api.DeleteGastoPendiente)
 			r.Put("/gastos/{id}", api.UpdateGasto)
 			r.Delete("/gastos/{id}", api.DeleteGasto)
 

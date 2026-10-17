@@ -11,23 +11,29 @@ import (
 )
 
 type Gasto struct {
-	ID           string  `json:"id"`
-	CategoriaID  *string `json:"categoria_id"`
-	Categoria    *string `json:"categoria,omitempty"`
-	RecurrenteID *string `json:"recurrente_id,omitempty"`
-	CuentaID     *string `json:"cuenta_id"`
-	Cuenta       *string `json:"cuenta,omitempty"`
-	Descripcion  string  `json:"descripcion"`
-	Monto        float64 `json:"monto"`
-	Fecha        string  `json:"fecha"`
+	ID                string   `json:"id"`
+	CategoriaID       *string  `json:"categoria_id"`
+	Categoria         *string  `json:"categoria,omitempty"`
+	RecurrenteID      *string  `json:"recurrente_id,omitempty"`
+	CuentaID          *string  `json:"cuenta_id"`
+	Cuenta            *string  `json:"cuenta,omitempty"`
+	Descripcion       string   `json:"descripcion"`
+	Monto             float64  `json:"monto"`
+	Fecha             string   `json:"fecha"`
+	UbicacionLatitud  *float64 `json:"ubicacion_latitud"`
+	UbicacionLongitud *float64 `json:"ubicacion_longitud"`
+	UbicacionNombre   *string  `json:"ubicacion_nombre"`
 }
 
 type gastoInput struct {
-	CategoriaID *string `json:"categoria_id"`
-	CuentaID    *string `json:"cuenta_id"`
-	Descripcion string  `json:"descripcion"`
-	Monto       float64 `json:"monto"`
-	Fecha       string  `json:"fecha"` // AAAA-MM-DD; si va vacía, se usa hoy
+	CategoriaID       *string  `json:"categoria_id"`
+	CuentaID          *string  `json:"cuenta_id"`
+	Descripcion       string   `json:"descripcion"`
+	Monto             float64  `json:"monto"`
+	Fecha             string   `json:"fecha"` // AAAA-MM-DD; si va vacía, se usa hoy
+	UbicacionLatitud  *float64 `json:"ubicacion_latitud"`
+	UbicacionLongitud *float64 `json:"ubicacion_longitud"`
+	UbicacionNombre   *string  `json:"ubicacion_nombre"`
 }
 
 func (a *API) ListGastos(w http.ResponseWriter, r *http.Request) {
@@ -38,7 +44,8 @@ func (a *API) ListGastos(w http.ResponseWriter, r *http.Request) {
 	}
 	rows, err := a.DB.Query(r.Context(), `
 		SELECT g.id::text, g.categoria_id::text, c.nombre, g.recurrente_id::text,
-		       g.cuenta_id::text, cta.nombre, g.descripcion, g.monto::float8, to_char(g.fecha, 'YYYY-MM-DD')
+		       g.cuenta_id::text, cta.nombre, g.descripcion, g.monto::float8, to_char(g.fecha, 'YYYY-MM-DD'),
+		       g.ubicacion_latitud, g.ubicacion_longitud, g.ubicacion_nombre
 		FROM gastos g
 		LEFT JOIN categorias c ON c.id = g.categoria_id
 		LEFT JOIN cuentas cta ON cta.id = g.cuenta_id
@@ -54,7 +61,8 @@ func (a *API) ListGastos(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var g Gasto
 		if err := rows.Scan(&g.ID, &g.CategoriaID, &g.Categoria, &g.RecurrenteID,
-			&g.CuentaID, &g.Cuenta, &g.Descripcion, &g.Monto, &g.Fecha); err != nil {
+			&g.CuentaID, &g.Cuenta, &g.Descripcion, &g.Monto, &g.Fecha,
+			&g.UbicacionLatitud, &g.UbicacionLongitud, &g.UbicacionNombre); err != nil {
 			httpx.DBError(w, err)
 			return
 		}
@@ -78,6 +86,10 @@ func (a *API) CreateGasto(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusBadRequest, msg)
 		return
 	}
+	if msg := validarUbicacion(in.UbicacionLatitud, in.UbicacionLongitud, in.UbicacionNombre); msg != "" {
+		httpx.Error(w, http.StatusBadRequest, msg)
+		return
+	}
 	in.Descripcion = strings.TrimSpace(in.Descripcion)
 	in.CategoriaID = nilIfEmpty(in.CategoriaID)
 	in.CuentaID = nilIfEmpty(in.CuentaID)
@@ -96,11 +108,17 @@ func (a *API) CreateGasto(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	g := Gasto{CategoriaID: in.CategoriaID, CuentaID: in.CuentaID, Descripcion: in.Descripcion, Monto: in.Monto, Fecha: fecha.Format(dateLayout)}
+	g := Gasto{
+		CategoriaID: in.CategoriaID, CuentaID: in.CuentaID, Descripcion: in.Descripcion,
+		Monto: in.Monto, Fecha: fecha.Format(dateLayout), UbicacionLatitud: in.UbicacionLatitud,
+		UbicacionLongitud: in.UbicacionLongitud, UbicacionNombre: in.UbicacionNombre,
+	}
 	err := a.DB.QueryRow(r.Context(), `
-		INSERT INTO gastos (usuario_id, categoria_id, cuenta_id, descripcion, monto, fecha)
-		VALUES ($1, $2, $3, $4, $5::float8::numeric, $6) RETURNING id::text`,
-		uid, in.CategoriaID, in.CuentaID, in.Descripcion, in.Monto, fecha).Scan(&g.ID)
+		INSERT INTO gastos
+			(usuario_id, categoria_id, cuenta_id, descripcion, monto, fecha, ubicacion_latitud, ubicacion_longitud, ubicacion_nombre)
+		VALUES ($1, $2, $3, $4, $5::float8::numeric, $6, $7, $8, $9) RETURNING id::text`,
+		uid, in.CategoriaID, in.CuentaID, in.Descripcion, in.Monto, fecha,
+		in.UbicacionLatitud, in.UbicacionLongitud, in.UbicacionNombre).Scan(&g.ID)
 	if err != nil {
 		httpx.DBError(w, err)
 		return
@@ -117,6 +135,10 @@ func (a *API) UpdateGasto(w http.ResponseWriter, r *http.Request) {
 	}
 	fecha, msg := a.validarMovimiento(in.Descripcion, in.Monto, in.Fecha)
 	if msg != "" {
+		httpx.Error(w, http.StatusBadRequest, msg)
+		return
+	}
+	if msg := validarUbicacion(in.UbicacionLatitud, in.UbicacionLongitud, in.UbicacionNombre); msg != "" {
 		httpx.Error(w, http.StatusBadRequest, msg)
 		return
 	}
@@ -138,9 +160,11 @@ func (a *API) UpdateGasto(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	tag, err := a.DB.Exec(r.Context(), `
-		UPDATE gastos SET categoria_id = $3, cuenta_id = $4, descripcion = $5, monto = $6::float8::numeric, fecha = $7
+		UPDATE gastos SET categoria_id = $3, cuenta_id = $4, descripcion = $5, monto = $6::float8::numeric,
+			fecha = $7, ubicacion_latitud = $8, ubicacion_longitud = $9, ubicacion_nombre = $10
 		WHERE id = $1 AND usuario_id = $2`,
-		id, uid, in.CategoriaID, in.CuentaID, in.Descripcion, in.Monto, fecha)
+		id, uid, in.CategoriaID, in.CuentaID, in.Descripcion, in.Monto, fecha,
+		in.UbicacionLatitud, in.UbicacionLongitud, in.UbicacionNombre)
 	if err != nil {
 		httpx.DBError(w, err)
 		return
@@ -149,7 +173,24 @@ func (a *API) UpdateGasto(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusNotFound, "no encontrado")
 		return
 	}
-	httpx.JSON(w, http.StatusOK, Gasto{ID: id, CategoriaID: in.CategoriaID, CuentaID: in.CuentaID, Descripcion: in.Descripcion, Monto: in.Monto, Fecha: fecha.Format(dateLayout)})
+	httpx.JSON(w, http.StatusOK, Gasto{
+		ID: id, CategoriaID: in.CategoriaID, CuentaID: in.CuentaID, Descripcion: in.Descripcion,
+		Monto: in.Monto, Fecha: fecha.Format(dateLayout), UbicacionLatitud: in.UbicacionLatitud,
+		UbicacionLongitud: in.UbicacionLongitud, UbicacionNombre: in.UbicacionNombre,
+	})
+}
+
+func validarUbicacion(latitud, longitud *float64, nombre *string) string {
+	if (latitud == nil) != (longitud == nil) {
+		return "ubicacion_latitud y ubicacion_longitud deben enviarse juntas"
+	}
+	if latitud != nil && (*latitud < -90 || *latitud > 90 || *longitud < -180 || *longitud > 180) {
+		return "coordenadas de ubicación inválidas"
+	}
+	if nombre != nil && len(strings.TrimSpace(*nombre)) > 200 {
+		return "ubicacion_nombre no puede exceder 200 caracteres"
+	}
+	return ""
 }
 
 func (a *API) DeleteGasto(w http.ResponseWriter, r *http.Request) {

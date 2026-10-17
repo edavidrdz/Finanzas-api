@@ -25,7 +25,7 @@ import (
 
 func TestSyncSnapshotCollectionContract(t *testing.T) {
 	want := []string{
-		"accounts", "balance_adjustments", "categories", "expenses", "incomes", "recurring_services",
+		"accounts", "balance_adjustments", "categories", "expense_drafts", "expenses", "incomes", "recurring_services",
 		"scheduled_expense_allocations", "scheduled_expense_payments", "scheduled_expenses",
 		"scheduled_income_assignments", "scheduled_incomes", "transfers",
 	}
@@ -102,6 +102,7 @@ func TestSyncPushIntegration(t *testing.T) {
 	for _, name := range []string{
 		"001_init.sql", "002_cuentas_y_transferencias.sql", "003_gastos_programados.sql",
 		"004_ingresos_programados_y_flujo.sql", "005_google_auth.sql", "006_password_reset.sql", "007_offline_sync.sql",
+		"008_gastos_pendientes_y_ubicacion.sql",
 	} {
 		migration, err := os.ReadFile(filepath.Join("..", "..", "migrations", name))
 		if err != nil {

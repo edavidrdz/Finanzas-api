@@ -37,8 +37,12 @@ var syncEntities = map[string]syncEntity{
 		table: "cuentas", fields: []string{"nombre", "institucion", "tipo", "saldo_inicial", "fecha_saldo_inicial", "limite_credito", "activa"},
 	},
 	"expenses": {
-		table: "gastos", fields: []string{"categoria_id", "recurrente_id", "descripcion", "monto", "fecha", "cuenta_id", "programado_id", "programado_fecha"},
+		table: "gastos", fields: []string{"categoria_id", "recurrente_id", "descripcion", "monto", "fecha", "cuenta_id", "programado_id", "programado_fecha", "ubicacion_latitud", "ubicacion_longitud", "ubicacion_nombre"},
 		refs: map[string]string{"categoria_id": "categorias", "recurrente_id": "gastos_recurrentes", "cuenta_id": "cuentas", "programado_id": "gastos_programados"},
+	},
+	"expense_drafts": {
+		table: "gastos_pendientes", fields: []string{"categoria_id", "cuenta_id", "descripcion", "monto", "fecha", "ubicacion_latitud", "ubicacion_longitud", "ubicacion_nombre", "iniciada_en", "completando"},
+		refs: map[string]string{"categoria_id": "categorias", "cuenta_id": "cuentas"},
 	},
 	"incomes": {
 		table: "ingresos", fields: []string{"categoria_id", "descripcion", "monto", "fecha", "periodicidad", "cuenta_id", "ingreso_programado_id", "programado_fecha"},
